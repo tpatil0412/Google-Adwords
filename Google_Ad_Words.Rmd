@@ -1,0 +1,201 @@
+---
+title: "Google_Ad_Words"
+author: "Tejas Patil"
+date: "June 9, 2017"
+output: html_document
+---
+
+```{r}
+
+library(data.table)
+library(dplyr)
+ad = read.csv("Google_Ad_Words.csv")
+
+total_imp = ad %>% group_by(Ad.Group) %>% summarize(sum(Impressions))
+names(total_imp) = c("Category","Total Impressions")
+
+#total impressions by category
+barplot(total_imp$`Total Impressions`,names.arg = total_imp$Category,xlab = "Category of Ads",ylab = "Total Impressions",col = "steel blue",main = "Impressions by Ad Category")
+
+```
+```{r}
+library(stats)
+library(reshape)
+
+#total impressions by year by category
+ad$Date = as.Date(ad$Date, format = "%d %B, %Y")
+
+tot_imp_date = ad %>% group_by(format(Date,"%Y"), Ad.Group) %>% summarize(sum(Impressions))
+names(tot_imp_date) = c("Date","Category","Imp")
+
+tot_imp_date$Date = as.Date(tot_imp_date$Date,format = "%Y")
+
+data = melt(tot_imp_date,id=c("Date","Category"))
+data = cast(data,Date~Category)
+
+
+
+plot(data$Date,data$`Adult Bikes` , xlab = "Year",ylab ="Total Impressions" ,type="l", lwd=2, col= " steel blue")
+points(data$Date, cex = 1,data$`Athletic Bikes`, type= 'l', col = "green")
+points(data$Date, cex = 1,data$`Common Keywords`, type= 'l', col = "yellow")
+points(data$Date, cex = 1,data$`Kids Bikes`, type= 'l', col = "red")
+```
+
+
+```{r}
+# Total Clicks by Category
+tot_clicks = ad %>% group_by(Ad.Group) %>% summarize(sum(Clicks))
+names(tot_clicks) = c("Category","Total Clicks")
+barplot(tot_clicks$`Total Clicks`,names.arg = tot_clicks$Category,xlab = "Category of Ads",ylab = "Total Clicks",col = "steel blue",main = "Clicks by Ad Category")
+
+#Total Clicks by year by Category
+tot_clk_date = ad %>% group_by(format(Date,"%Y"), Ad.Group) %>% summarize(sum(Clicks))
+names(tot_clk_date) = c("Date","Category","Clicks")
+tot_clk_date$Date = as.Date(tot_clk_date$Date,format = "%Y")
+
+data1 = melt(tot_clk_date,id=c("Date","Category"))
+data1 = cast(data1,Date~Category)
+
+plot(data1$Date,data1$`Adult Bikes` , xlab = "Year",ylab ="Total Clicks" ,type="o", lwd=2, col= " steel blue")
+points(data1$Date, cex = 1,data1$`Athletic Bikes`, type= 'b', col = "green")
+points(data1$Date, cex = 1,data1$`Common Keywords`, type= 'b', col = "yellow")
+points(data1$Date, cex = 1,data1$`Kids Bikes`, type= 'b', col = "red")
+```
+```{r}
+# Relationships between Impressions and Clicks
+mrg_data = merge(total_imp, tot_clicks, by= "Category", all.x = T, all.y = F)
+
+plot(ad$`Clicks`, ad$`Conversions`, main="Relation between Clicks and COnversion", xlab="Total Clicks", ylab="Total Conversions ")
+abline(ad$`Clicks`, ad$`Conversions` )
+
+library(car)
+scatterplot(ad$`Conversions` ~ ad$`Clicks` | Ad.Group, data=ad, 
+  	xlab="Total Clicks", ylab="Customer Conversion", 
+   main="Relation between Impression and Clicks", 
+   labels=row.names(ad))
+abline(lm( ad$`Conversions` ~ ad$`Clicks` ))
+
+mrg_date = merge(tot_imp_date, tot_clk_date)
+scatterplot(mrg_date$`Imp` ~ mrg_date$`Clicks` | Category, data=mrg_date, 
+  	xlab="Total Clicks", ylab="Total Impression", 
+   main="Relation between Impression and Clicks", 
+   labels=row.names(mrg_date))
+
+```
+
+```{r}
+# Data Preprocessing
+library(caTools)
+set.seed(1)
+
+ad_data = ad
+ad_data$Ad.Group = as.character(ad_data$Ad.Group)
+ad_data$Ad.Group[ad_data$Ad.Group == "Adult Bikes"] = "0"
+ad_data$Ad.Group[ad_data$Ad.Group == "Athletic Bikes"] = "1"
+ad_data$Ad.Group[ad_data$Ad.Group == "Common Keywords"] = "2"
+ad_data$Ad.Group[ad_data$Ad.Group == "Kids Bikes"] = "3"
+
+ad_data$Ad.Group = as.factor(ad_data$Ad.Group)
+
+
+split = sample(4289,4289)
+train <- ad_data[split,]
+train = train[c(-1,-2)]
+
+train$CTR = gsub('\\%', '', train$CTR)
+train$Avg.CPM = gsub('\\$', '', train$Avg.CPM)
+train$Avg.CPC = gsub('\\$', '', train$Avg.CPC)
+train$Cost = gsub('\\$', '', train$Cost)
+train$Cost...Conversion = gsub('\\$', '', train$Cost...Conversion)
+
+
+train$Ad.Group = as.numeric(train$Ad.Group)
+train$CTR = as.numeric(train$CTR)
+train$Avg.CPM = as.numeric(train$Avg.CPM)
+train$Avg.CPC = as.numeric(train$Avg.CPC)
+train$Cost = as.numeric(train$Cost)
+train$Cost...Conversion = as.numeric(train$Cost...Conversion)
+
+dep_var = train$Avg.Position
+rf_train = train[,c(-8)]
+
+
+test <- ad_data[-split,]
+test = test[c(-1,-2)]
+
+
+test$CTR = gsub('\\%', '', test$CTR)
+test$Avg.CPM = gsub('\\$', '', test$Avg.CPM)
+test$Avg.CPC = gsub('\\$', '', test$Avg.CPC)
+test$Cost = gsub('\\$', '', test$Cost)
+test$Cost...Conversion = gsub('\\$', '', test$Cost...Conversion)
+
+
+test$Ad.Group = as.numeric(test$Ad.Group)
+test$CTR = as.numeric(test$CTR)
+test$Avg.CPM = as.numeric(test$Avg.CPM)
+test$Avg.CPC = as.numeric(test$Avg.CPC)
+test$Cost = as.numeric(test$Cost)
+test$Cost...Conversion = as.numeric(test$Cost...Conversion)
+
+table(test$Ad.Group)
+
+```
+
+
+```{r}
+# Feature Selection using PCA
+prin_comp <- prcomp(train, scale. = T)
+names(prin_comp)
+
+ prin_comp$rotation
+ 
+biplot(prin_comp, scale = 0)
+
+std_dev <- prin_comp$sdev
+
+pr_var <- std_dev^2
+
+prop_varex <- pr_var/sum(pr_var)
+plot(prop_varex, xlab = "Principal Component",
+             ylab = "Proportion of Variance Explained",
+             type = "b")
+
+prop_varex
+
+# Classification Decision Tree
+train.data = data.frame(Ad.Group = train$Ad.Group, prin_comp$x)
+train.data$Ad.Group = as.factor(train.data$Ad.Group)
+
+
+sam = sample(4289,3289)
+train_data = train.data[sam,]
+test_data = train.data[-sam,]
+
+library(rpart)
+library(rpart.plot)
+reg_tree <- rpart(Ad.Group ~ .,data = train_data, method = "class")
+prp(reg_tree)
+
+
+
+reg_prd <- predict(reg_tree, test_data,type="class")
+
+plot(reg_prd)
+
+table(reg_prd , test_data$Ad.Group)
+mean(reg_prd == test_data$Ad.Group)
+library(caret)
+confusionMatrix(test_data$Ad.Group, reg_prd)
+```
+```{r}
+# Logistic Regression
+train1 = data.frame(Ad.Group = train$Ad.Group, prin_comp$x)
+train_pos = train1[sam,]
+test_pos = train1[-sam,]
+library(glmnet)
+glm_ad = glm(Ad.Group ~ ., data = train_data, family = "binomial")
+glm_prd = predict(glm_ad, test_data, type = "response")
+table(test_data$Ad.Group, glm_prd)
+```
+
